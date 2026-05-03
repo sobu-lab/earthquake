@@ -25,5 +25,5 @@
 
 - Earthquake data: [USGS FDSN API](https://earthquake.usgs.gov/fdsnws/event/1/) (Public Domain)
 - Japan map: [dataofjapan/land](https://github.com/dataofjapan/land) (MIT)
-- Plate boundaries: [fraxen/tectonicplates](https://github.com/fraxen/tectonicplates) (CC BY)
+- Plate boundaries: [fraxen/tectonicplates](https://github.com/fraxen/tectonicplates) (CC BY 3.0)
 - Slab geometry: [USGS Slab2](https://www.sciencebase.gov/catalog/item/5aa1b00ee4b0b1c392e86467) — Hayes et al. (2018) (CC0)
