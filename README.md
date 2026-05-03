@@ -2,7 +2,8 @@
 
 日本の地震・プレート構造を3Dで可視化するWebアプリです。
 
-**公開URL**: https://sobu-lab.github.io/earthquake/
+**3D版**: https://sobu-lab.github.io/earthquake/
+**2D版**: https://sobu-lab.github.io/earthquake/earthquake_2d.html
 
 ## 機能
 
