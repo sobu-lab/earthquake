@@ -5,6 +5,14 @@
 **3D版**: https://sobu-lab.github.io/earthquake/
 **2D版**: https://sobu-lab.github.io/earthquake/earthquake_2d.html
 
+## スクリーンショット
+
+### 3D版
+![3D版](docs/screenshot_3d.png)
+
+### 2D版
+![2D版](docs/screenshot_2d.png)
+
 ## 機能
 
 - 過去30日のM3以上の地震をリアルタイム取得・3D表示
