@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地震発生順序マップ</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=BIZ+UDGothic:wght@400;700&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --panel: #0f1628;
+    --border: #1e2d4a;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --text: #c8ddf0;
+    --text-dim: #4a6080;
+    --grid: rgba(0, 212, 255, 0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'BIZ UDGothic', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    line-height: 1.4;
+  }
+
+  .header-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .header-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .status-pill {
+    margin-left: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    border: 1px solid;
+  }
+  .status-pill.loading { color: var(--accent); border-color: var(--accent); animation: pulse 1s infinite; }
+  .status-pill.done { color: #00ff88; border-color: #00ff88; }
+  .status-pill.error { color: var(--accent2); border-color: var(--accent2); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* MAP */
+  #map-wrap {
+    flex: 1;
+    position: relative;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    cursor: crosshair;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 260px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+  }
+
+  .controls {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ctrl-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  label {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.1em;
+  }
+
+  input[type=range] {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 2px;
+  }
+
+  .range-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    text-align: right;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .toggle {
+    width: 36px; height: 18px;
+    background: var(--border);
+    border-radius: 9px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: white;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: left 0.2s;
+  }
+  .toggle.on::after { left: 20px; }
+
+  .legend {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .legend-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .eq-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .eq-list::-webkit-scrollbar { width: 3px; }
+  .eq-list::-webkit-scrollbar-track { background: transparent; }
+  .eq-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .eq-item {
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-left: 2px solid transparent;
+  }
+  .eq-item:hover { background: rgba(0,212,255,0.05); }
+  .eq-item.active {
+    background: rgba(0,212,255,0.08);
+    border-left-color: var(--accent);
+  }
+
+  .eq-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+  }
+
+  .eq-mag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    display: inline;
+  }
+
+  .eq-place {
+    font-size: 11px;
+    color: var(--text);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .eq-time {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  /* tooltip */
+  #tooltip {
+    position: fixed;
+    background: rgba(10,14,26,0.95);
+    border: 1px solid var(--accent);
+    padding: 8px 12px;
+    font-size: 11px;
+    pointer-events: none;
+    display: none;
+    z-index: 100;
+    max-width: 220px;
+    box-shadow: 0 0 20px rgba(0,212,255,0.2);
+  }
+  #tooltip .tt-num { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-dim); }
+  #tooltip .tt-place { font-weight:700; margin: 2px 0; }
+  #tooltip .tt-mag { font-family:'Share Tech Mono',monospace; color:var(--accent); font-size:13px; }
+  #tooltip .tt-time { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--text-dim); margin-top:3px; }
+  #tooltip .tt-depth { font-size:10px; color:var(--text-dim); }
+
+  .empty-msg {
+    padding: 20px 14px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* Drop zone overlay */
+  #drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,212,255,0.06);
+    border: 2px dashed var(--accent);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  #drop-overlay.active { opacity: 1; pointer-events: all; }
+  #drop-overlay .drop-icon { font-size: 48px; margin-bottom: 12px; }
+  #drop-overlay .drop-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+  }
+  #drop-overlay .drop-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+
+  /* Map load button */
+  #geojson-btn {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    z-index: 10;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.15s;
+  }
+  #geojson-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #geojson-btn.loaded { border-color: #00ff88; color: #00ff88; }
+  #geojson-file { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SEISMIC<br>MONITOR</div>
+  <div>
+    <div class="header-title">地震発生順序マップ — 直近1ヶ月 / 日本全国</div>
+    <div class="header-sub" id="data-source">DATA: 気象庁 JMA (P2P地震情報 + Usgs fallback)</div>
+  </div>
+  <div class="status-pill loading" id="status">LOADING</div>
+</header>
+
+<div class="main">
+  <div id="map-wrap">
+    <canvas id="bg-canvas"></canvas>
+    <canvas id="main-canvas"></canvas>
+    <div id="drop-overlay">
+      <div class="drop-icon">🗾</div>
+      <div class="drop-text">japan.geojson をドロップ</div>
+      <div class="drop-sub">dataofjapan/land から取得したファイルを使用</div>
+    </div>
+    <button id="geojson-btn" title="japan.geojson を読み込む">🗾 地図ファイル読込</button>
+    <input type="file" id="geojson-file" accept=".geojson,.json">
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">DISPLAY CONTROLS</div>
+    <div class="controls">
+      <div class="ctrl-row">
+        <label>最小マグニチュード</label>
+        <input type="range" id="mag-filter" min="1" max="6" step="0.5" value="3">
+        <div class="range-val">M <span id="mag-val">3.0</span> 以上</div>
+      </div>
+      <div class="ctrl-row">
+        <label>表示件数上限</label>
+        <input type="range" id="count-filter" min="10" max="200" step="10" value="80">
+        <div class="range-val"><span id="count-val">80</span> 件</div>
+      </div>
+      <div class="toggle-row">
+        <label>順序ライン表示</label>
+        <div class="toggle on" id="toggle-line"></div>
+      </div>
+      <div class="toggle-row">
+        <label>番号ラベル表示</label>
+        <div class="toggle on" id="toggle-label"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-title">MAGNITUDE</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00d4ff;width:6px;height:6px"></div> M3未満</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7dff6b;width:9px;height:9px"></div> M3〜4</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffd700;width:12px;height:12px"></div> M4〜5</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff8c00;width:16px;height:16px"></div> M5〜6</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff2020;width:20px;height:20px"></div> M6以上</div>
+    </div>
+
+    <div class="sidebar-header">EARTHQUAKE LIST <span id="eq-count" style="color:var(--text)"></span></div>
+    <div class="eq-list" id="eq-list"></div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+// ====== Japan map projection ======
+const JAPAN = { latMin: 24, latMax: 46, lonMin: 122, lonMax: 146 };
+
+let earthquakes = [];
+let filtered = [];
+let showLine = true;
+let showLabel = true;
+let magFilter = 3.0;
+let countLimit = 80;
+let hoveredIdx = -1;
+let selectedIdx = -1;
+let japanGeoJSON = null;
+
+const bgCanvas = document.getElementById('bg-canvas');
+const mainCanvas = document.getElementById('main-canvas');
+const bgCtx = bgCanvas.getContext('2d');
+const mainCtx = mainCanvas.getContext('2d');
+const mapWrap = document.getElementById('map-wrap');
+const tooltip = document.getElementById('tooltip');
+
+function resize() {
+  const w = mapWrap.clientWidth;
+  const h = mapWrap.clientHeight;
+  [bgCanvas, mainCanvas].forEach(c => { c.width = w; c.height = h; });
+  drawBg();
+  drawMain();
+}
+
+function latLonToXY(lat, lon) {
+  const w = mainCanvas.width, h = mainCanvas.height;
+  const pad = 40;
+
+  // Mercator-corrected aspect ratio
+  // cos(centerLat) adjusts longitude scaling so 1° lon = correct distance
+  const centerLat = (JAPAN.latMin + JAPAN.latMax) / 2; // ~35°
+  const cosLat = Math.cos(centerLat * Math.PI / 180); // ~0.819
+
+  const lonSpan = (JAPAN.lonMax - JAPAN.lonMin) * cosLat;
+  const latSpan = (JAPAN.latMax - JAPAN.latMin);
+  const dataAspect = lonSpan / latSpan; // ~0.9
+
+  const availW = w - pad * 2;
+  const availH = h - pad * 2;
+  const screenAspect = availW / availH;
+
+  let scaleW, scaleH, offX = 0, offY = 0;
+  if (dataAspect > screenAspect) {
+    // width-limited
+    scaleW = availW;
+    scaleH = availW / dataAspect;
+    offY = (availH - scaleH) / 2;
+  } else {
+    // height-limited
+    scaleH = availH;
+    scaleW = availH * dataAspect;
+    offX = (availW - scaleW) / 2;
+  }
+
+  const x = pad + offX + (lon - JAPAN.lonMin) * cosLat / lonSpan * scaleW;
+  const y = pad + offY + scaleH - (lat - JAPAN.latMin) / latSpan * scaleH;
+  return [x, y];
+}
+
+// ====== Draw GeoJSON polygon/multipolygon on canvas ======
+function drawGeoFeature(ctx, feature) {
+  const geom = feature.geometry;
+  const rings = geom.type === 'Polygon' ? geom.coordinates
+              : geom.type === 'MultiPolygon' ? geom.coordinates.flat(1)
+              : [];
+  rings.forEach(ring => {
+    ctx.beginPath();
+    ring.forEach(([lon, lat], i) => {
+      const [x, y] = latLonToXY(lat, lon);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+}
+
+async function loadJapanMap() {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/japan.geojson');
+    if (!res.ok) throw new Error('fetch failed: ' + res.status);
+    const data = await res.json();
+    japanGeoJSON = data.type === 'FeatureCollection' ? data.features : [data];
+    console.log('GeoJSON loaded:', japanGeoJSON.length, 'features');
+  } catch (e) {
+    console.warn('GeoJSON fetch failed, using fallback:', e.message);
+    japanGeoJSON = null;
+  }
+}
+
+function drawBg() {
+  const w = bgCanvas.width, h = bgCanvas.height;
+  bgCtx.clearRect(0, 0, w, h);
+
+  // Ocean fill
+  bgCtx.fillStyle = '#080c18';
+  bgCtx.fillRect(0, 0, w, h);
+
+  // Grid lines
+  bgCtx.strokeStyle = 'rgba(0,212,255,0.05)';
+  bgCtx.lineWidth = 0.5;
+  for (let lat = 24; lat <= 46; lat += 2) {
+    const [x1,y1] = latLonToXY(lat, JAPAN.lonMin);
+    const [x2,y2] = latLonToXY(lat, JAPAN.lonMax);
+    bgCtx.beginPath(); bgCtx.moveTo(x1,y1); bgCtx.lineTo(x2,y2); bgCtx.stroke();
+  }
+  for (let lon = 122; lon <= 146; lon += 2) {
+    const [x1,y1] = latLonToXY(JAPAN.latMin, lon);
+    const [x2,y2] = latLonToXY(JAPAN.latMax, lon);
+    bgCtx.beginPath(); bgCtx.moveTo(x1,y1); bgCtx.lineTo(x2,y2); bgCtx.stroke();
+  }
+
+  // Japan land mass
+  if (japanGeoJSON && japanGeoJSON.length > 0) {
+    bgCtx.fillStyle = '#141e30';
+    bgCtx.strokeStyle = 'rgba(0,212,255,0.35)';
+    bgCtx.lineWidth = 0.8;
+    japanGeoJSON.forEach(f => drawGeoFeature(bgCtx, f));
+  } else {
+    // Fallback: simple polygon approximations
+    drawFallbackJapan();
+  }
+
+  // Axis labels
+  bgCtx.font = '9px "Share Tech Mono"';
+  bgCtx.fillStyle = 'rgba(74,96,128,0.8)';
+  bgCtx.textAlign = 'center';
+  for (let lon = 124; lon <= 146; lon += 4) {
+    const [x] = latLonToXY(JAPAN.latMin, lon);
+    bgCtx.fillText(lon + '°E', x, h - 8);
+  }
+  bgCtx.textAlign = 'right';
+  for (let lat = 26; lat <= 46; lat += 4) {
+    const [x, y] = latLonToXY(lat, JAPAN.lonMin);
+    bgCtx.fillText(lat + '°N', x - 4, y + 3);
+  }
+}
+
+// Fallback hand-crafted outlines if GeoJSON fails
+function drawFallbackJapan() {
+  const islands = [
+    // Hokkaido
+    [[45.52,141.94],[45.33,141.68],[44.77,141.68],[44.35,141.17],[43.25,141.37],
+     [42.55,140.52],[42.35,140.28],[42.25,140.57],[42.48,141.03],[42.98,141.38],
+     [43.52,141.94],[43.88,143.92],[44.12,144.55],[44.35,145.32],[43.95,145.82],
+     [44.35,146.00],[44.85,145.33],[45.04,143.92],[45.42,142.73],[45.52,141.94]],
+    // Honshu (Pacific coast south → Sea of Japan coast north, loop)
+    [[41.55,141.45],[41.08,141.12],[40.55,141.38],[39.72,141.98],[39.33,141.47],
+     [38.92,141.03],[38.32,140.98],[37.52,141.05],[36.80,140.88],[36.50,140.80],
+     [35.72,140.87],[35.62,140.02],[35.38,139.08],[34.90,138.92],[34.62,138.22],
+     [34.60,137.23],[34.72,136.88],[34.88,136.55],[34.62,136.00],[34.43,135.57],
+     [34.60,135.38],[34.88,135.80],[34.90,135.42],[34.57,135.05],[34.32,134.92],
+     [34.08,134.55],[33.88,133.68],[33.96,132.72],[34.38,132.52],[34.72,131.85],
+     [35.55,131.18],[35.88,130.88],[36.10,130.73],[36.88,130.83],[37.45,136.78],
+     [37.30,137.25],[37.12,138.20],[37.35,138.83],[37.55,139.02],[38.35,139.40],
+     [38.92,139.80],[39.43,140.02],[40.10,140.10],[40.85,140.25],[41.28,141.08],
+     [41.55,141.45]],
+    // Shikoku
+    [[34.18,132.72],[33.88,132.48],[33.45,132.95],[33.18,133.48],[33.15,134.12],
+     [33.45,134.62],[33.88,134.82],[34.18,134.25],[34.42,133.82],[34.18,132.72]],
+    // Kyushu
+    [[33.88,130.88],[33.52,130.35],[33.22,129.68],[32.72,130.12],[32.12,130.52],
+     [31.45,130.55],[31.08,130.22],[30.42,130.82],[31.08,131.35],[31.82,131.72],
+     [32.72,131.88],[33.42,131.55],[33.82,130.95],[33.88,130.88]],
+    // Okinawa Honto
+    [[26.78,128.27],[26.52,127.93],[26.12,127.63],[25.98,127.80],[26.10,128.15],
+     [26.42,128.32],[26.78,128.27]],
+    // Amami-Oshima
+    [[28.45,129.72],[28.22,129.48],[28.00,129.35],[27.85,129.50],[27.98,129.70],
+     [28.25,129.85],[28.45,129.72]],
+    // Tsushima
+    [[34.68,129.48],[34.42,129.28],[34.05,129.22],[33.93,129.40],[34.08,129.60],
+     [34.38,129.65],[34.68,129.48]],
+    // Sado
+    [[38.45,138.55],[38.25,138.35],[38.00,138.22],[37.85,138.42],[37.98,138.60],
+     [38.25,138.70],[38.45,138.55]],
+    // Izu-Oshima
+    [[34.80,139.42],[34.68,139.35],[34.62,139.48],[34.72,139.55],[34.80,139.42]],
+  ];
+  bgCtx.fillStyle = '#141e30';
+  bgCtx.strokeStyle = 'rgba(0,212,255,0.45)';
+  bgCtx.lineWidth = 1.0;
+  islands.forEach(pts => {
+    bgCtx.beginPath();
+    pts.forEach(([lat,lon],i) => {
+      const [x,y] = latLonToXY(lat,lon);
+      i===0 ? bgCtx.moveTo(x,y) : bgCtx.lineTo(x,y);
+    });
+    bgCtx.closePath();
+    bgCtx.fill();
+    bgCtx.stroke();
+  });
+}
+
+function magToColor(m) {
+  if (m < 3) return '#00d4ff';
+  if (m < 4) return '#7dff6b';
+  if (m < 5) return '#ffd700';
+  if (m < 6) return '#ff8c00';
+  return '#ff2020';
+}
+
+function magToRadius(m) {
+  if (m < 3) return 4;
+  if (m < 4) return 6;
+  if (m < 5) return 9;
+  if (m < 6) return 13;
+  return 18;
+}
+
+function drawMain() {
+  const w = mainCanvas.width, h = mainCanvas.height;
+  mainCtx.clearRect(0, 0, w, h);
+  if (!filtered.length) return;
+
+  const pts = filtered.map(eq => latLonToXY(eq.lat, eq.lon));
+
+  // Draw sequence lines
+  if (showLine && pts.length > 1) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const t = i / (pts.length - 2);
+      const alpha = 0.15 + t * 0.45;
+      mainCtx.beginPath();
+      mainCtx.moveTo(pts[i][0], pts[i][1]);
+      mainCtx.lineTo(pts[i+1][0], pts[i+1][1]);
+
+      // Arrow-like gradient
+      const grad = mainCtx.createLinearGradient(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1]);
+      grad.addColorStop(0, `rgba(0,212,255,${alpha * 0.5})`);
+      grad.addColorStop(1, `rgba(0,212,255,${alpha})`);
+      mainCtx.strokeStyle = grad;
+      mainCtx.lineWidth = 1 + t * 0.5;
+      mainCtx.stroke();
+
+      // Arrowhead at midpoint
+      if (i % 3 === 0) {
+        const mx = (pts[i][0] + pts[i+1][0]) / 2;
+        const my = (pts[i][1] + pts[i+1][1]) / 2;
+        const angle = Math.atan2(pts[i+1][1] - pts[i][1], pts[i+1][0] - pts[i][0]);
+        mainCtx.save();
+        mainCtx.translate(mx, my);
+        mainCtx.rotate(angle);
+        mainCtx.beginPath();
+        mainCtx.moveTo(4, 0);
+        mainCtx.lineTo(-3, -3);
+        mainCtx.lineTo(-3, 3);
+        mainCtx.closePath();
+        mainCtx.fillStyle = `rgba(0,212,255,${alpha})`;
+        mainCtx.fill();
+        mainCtx.restore();
+      }
+    }
+  }
+
+  // Draw dots
+  filtered.forEach((eq, i) => {
+    const [x, y] = pts[i];
+    const r = magToRadius(eq.mag);
+    const color = magToColor(eq.mag);
+    const isHov = i === hoveredIdx;
+    const isSel = i === selectedIdx;
+    const isFirst = i === 0;
+    const isLast = i === filtered.length - 1;
+
+    // Glow
+    if (isHov || isSel || eq.mag >= 5) {
+      const glowR = r * (isHov ? 3.5 : 2.5);
+      const grd = mainCtx.createRadialGradient(x,y,0,x,y,glowR);
+      grd.addColorStop(0, color.replace(')', ',0.3)').replace('rgb', 'rgba'));
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      mainCtx.beginPath();
+      mainCtx.arc(x, y, glowR, 0, Math.PI*2);
+      mainCtx.fillStyle = grd;
+      mainCtx.fill();
+    }
+
+    // Circle
+    mainCtx.beginPath();
+    mainCtx.arc(x, y, r, 0, Math.PI*2);
+    mainCtx.fillStyle = isSel ? 'white' : color;
+    mainCtx.globalAlpha = isLast ? 1 : (isFirst ? 0.95 : 0.75 + i / filtered.length * 0.25);
+    mainCtx.fill();
+    mainCtx.globalAlpha = 1;
+
+    // Border for first/last
+    if (isFirst || isLast || isSel) {
+      mainCtx.beginPath();
+      mainCtx.arc(x, y, r + 2, 0, Math.PI*2);
+      mainCtx.strokeStyle = isFirst ? '#00ff88' : (isLast ? '#ff2020' : 'white');
+      mainCtx.lineWidth = 1.5;
+      mainCtx.stroke();
+    }
+
+    // Number label
+    if (showLabel) {
+      mainCtx.font = `bold ${Math.max(8, r - 1)}px "Share Tech Mono"`;
+      mainCtx.fillStyle = eq.mag >= 4 ? '#0a0e1a' : 'rgba(200,221,240,0.7)';
+      mainCtx.textAlign = 'center';
+      mainCtx.textBaseline = 'middle';
+      if (r >= 7) {
+        mainCtx.fillText(i+1, x, y);
+      }
+    }
+  });
+
+  mainCtx.textBaseline = 'alphabetic';
+}
+
+// ====== Sidebar list ======
+function renderList() {
+  const list = document.getElementById('eq-list');
+  document.getElementById('eq-count').textContent = `(${filtered.length})`;
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-msg">該当する地震データが<br>ありません</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map((eq, i) => `
+    <div class="eq-item ${i === selectedIdx ? 'active' : ''}" data-i="${i}">
+      <div class="eq-num">#${String(i+1).padStart(3,'0')} ${i===0?'<span style="color:#00ff88">▶ OLDEST</span>':''} ${i===filtered.length-1?'<span style="color:#ff2020">▶ LATEST</span>':''}</div>
+      <div>
+        <span class="eq-mag" style="color:${magToColor(eq.mag)}">M${eq.mag.toFixed(1)}</span>
+        ${eq.depth ? `<span style="font-size:10px;color:var(--text-dim);margin-left:6px">深さ${eq.depth}km</span>` : ''}
+      </div>
+      <div class="eq-place">${eq.place}</div>
+      <div class="eq-time">${formatTime(eq.time)}</div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.eq-item').forEach(el => {
+    el.addEventListener('click', () => {
+      selectedIdx = parseInt(el.dataset.i);
+      renderList();
+      drawMain();
+    });
+  });
+}
+
+function formatTime(t) {
+  const d = new Date(t);
+  return d.toLocaleString('ja-JP', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+// ====== Mouse interaction ======
+mainCanvas.addEventListener('mousemove', e => {
+  const rect = mainCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let found = -1;
+  for (let i = filtered.length-1; i >= 0; i--) {
+    const [x,y] = latLonToXY(filtered[i].lat, filtered[i].lon);
+    const r = magToRadius(filtered[i].mag) + 4;
+    if (Math.hypot(mx-x, my-y) < r) { found = i; break; }
+  }
+  hoveredIdx = found;
+  drawMain();
+
+  if (found >= 0) {
+    const eq = filtered[found];
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 12) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+    tooltip.innerHTML = `
+      <div class="tt-num">#${found+1} / ${filtered.length}</div>
+      <div class="tt-place">${eq.place}</div>
+      <div class="tt-mag">M${eq.mag.toFixed(1)}</div>
+      ${eq.depth ? `<div class="tt-depth">深さ ${eq.depth} km</div>` : ''}
+      <div class="tt-time">${new Date(eq.time).toLocaleString('ja-JP')}</div>
+    `;
+    mainCanvas.style.cursor = 'pointer';
+  } else {
+    tooltip.style.display = 'none';
+    mainCanvas.style.cursor = 'crosshair';
+  }
+});
+
+mainCanvas.addEventListener('click', e => {
+  if (hoveredIdx >= 0) {
+    selectedIdx = selectedIdx === hoveredIdx ? -1 : hoveredIdx;
+    renderList();
+    drawMain();
+    if (selectedIdx >= 0) {
+      const item = document.querySelector(`[data-i="${selectedIdx}"]`);
+      item?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+});
+
+mainCanvas.addEventListener('mouseleave', () => {
+  hoveredIdx = -1;
+  tooltip.style.display = 'none';
+  drawMain();
+});
+
+// ====== Controls ======
+document.getElementById('mag-filter').addEventListener('input', e => {
+  magFilter = parseFloat(e.target.value);
+  document.getElementById('mag-val').textContent = magFilter.toFixed(1);
+  applyFilter();
+});
+
+document.getElementById('count-filter').addEventListener('input', e => {
+  countLimit = parseInt(e.target.value);
+  document.getElementById('count-val').textContent = countLimit;
+  applyFilter();
+});
+
+document.getElementById('toggle-line').addEventListener('click', function() {
+  showLine = !showLine;
+  this.classList.toggle('on', showLine);
+  drawMain();
+});
+
+document.getElementById('toggle-label').addEventListener('click', function() {
+  showLabel = !showLabel;
+  this.classList.toggle('on', showLabel);
+  drawMain();
+});
+
+function applyFilter() {
+  filtered = earthquakes
+    .filter(eq => eq.mag >= magFilter)
+    .slice(-countLimit);
+  selectedIdx = -1;
+  renderList();
+  drawMain();
+}
+
+// ====== Data fetch ======
+async function fetchData() {
+  const status = document.getElementById('status');
+
+  // Try USGS API (CORS-friendly, reliable)
+  try {
+    const end = new Date();
+    const start = new Date(end - 30 * 24 * 60 * 60 * 1000);
+    const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${start.toISOString().split('T')[0]}&endtime=${end.toISOString().split('T')[0]}&minlatitude=24&maxlatitude=46&minlongitude=122&maxlongitude=146&minmagnitude=2.5&orderby=time-asc&limit=500`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('USGS fetch failed');
+    const data = await res.json();
+
+    earthquakes = data.features.map(f => ({
+      lat: f.geometry.coordinates[1],
+      lon: f.geometry.coordinates[0],
+      mag: f.properties.mag,
+      place: f.properties.place?.replace(/^\d+ km [NESW]+ of /, '') || '日本付近',
+      time: f.properties.time,
+      depth: Math.round(f.geometry.coordinates[2])
+    })).filter(eq => eq.mag >= 2.5);
+
+    document.getElementById('data-source').textContent = `DATA: USGS FDSN — ${earthquakes.length}件取得 (過去30日)`;
+    status.textContent = 'LIVE';
+    status.className = 'status-pill done';
+    applyFilter();
+  } catch (err) {
+    status.textContent = 'ERROR';
+    status.className = 'status-pill error';
+    document.getElementById('eq-list').innerHTML = '<div class="empty-msg">データの取得に失敗しました。<br>ネットワークを確認してください。</div>';
+    console.error(err);
+  }
+}
+
+
+// ====== GeoJSON file loading ======
+function loadGeoJSONFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.type === 'FeatureCollection') {
+        japanGeoJSON = data.features;
+      } else if (data.type === 'Feature') {
+        japanGeoJSON = [data];
+      } else if (data.type === 'MultiPolygon' || data.type === 'Polygon') {
+        japanGeoJSON = [{ type: 'Feature', geometry: data, properties: {} }];
+      }
+      const btn = document.getElementById('geojson-btn');
+      btn.textContent = '🗾 地図読込済 ✓';
+      btn.classList.add('loaded');
+      drawBg();
+      drawMain();
+      console.log('GeoJSON loaded:', japanGeoJSON.length, 'features');
+    } catch(err) {
+      alert('GeoJSONの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// File button
+document.getElementById('geojson-btn').addEventListener('click', () => {
+  document.getElementById('geojson-file').click();
+});
+document.getElementById('geojson-file').addEventListener('change', e => {
+  if (e.target.files[0]) loadGeoJSONFile(e.target.files[0]);
+});
+
+// Drag & drop on map area
+const mapWrapEl = document.getElementById('map-wrap');
+const dropOverlay = document.getElementById('drop-overlay');
+
+mapWrapEl.addEventListener('dragover', e => {
+  e.preventDefault();
+  if ([...e.dataTransfer.items].some(i => i.kind === 'file')) {
+    dropOverlay.classList.add('active');
+  }
+});
+mapWrapEl.addEventListener('dragleave', e => {
+  if (!mapWrapEl.contains(e.relatedTarget)) dropOverlay.classList.remove('active');
+});
+mapWrapEl.addEventListener('drop', e => {
+  e.preventDefault();
+  dropOverlay.classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (file) loadGeoJSONFile(file);
+});
+
+// ====== Init ======
+window.addEventListener('resize', resize);
+(async () => {
+  await loadJapanMap();
+  resize();
+  fetchData();
+})();
+</script>
+</body>
+</html>
